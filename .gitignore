@@ -1,0 +1,11 @@
+# Local review bundle
+/club-schedule-phase1-review.zip
+
+# OS and editor files throughout the repository
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
