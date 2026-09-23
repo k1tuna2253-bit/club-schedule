@@ -37,7 +37,8 @@ are not accepted.
     checks
 
 Calendar response should aggregate restrictions, events and normal
-schedules without leaking private memos.
+schedules without leaking private memos. Calendar cells contain no memo
+body; day detail may include readable non-empty memo fields.
 
 ## Schedules
 
@@ -48,14 +49,33 @@ schedules without leaking private memos.
 -   recurrence operations
 -   previous-same helper if implemented server-side
 
-Past schedule mutation: reject. Restriction conflict: validate
-server-side. Private memo: omit/redact for every non-owner response.
+Past schedule mutation: reject, including a moved recurrence when either
+its original occurrence date or its current replacement date is past in
+Asia/Tokyo. Restriction conflict: validate
+server-side. Create and update payloads include independent
+`private_memo` and `shared_memo` fields, each a string or null. Their
+contents are optional, and both may be empty or null.
+The legacy `memo` and `memo_visibility` columns are not part of the new
+API contract. Omit `private_memo` entirely from every non-owner response;
+return `shared_memo` to users who may view the schedule.
+
+For a recurring this-occurrence mutation, `occurrence_date` identifies
+the original series occurrence while `schedule.date` may identify a new
+destination date. The original date remains the exception key. A moved
+replacement is absent from the original day and appears on the
+destination day with `original_date` and its series association. Editing
+or cancelling that exception removes any prior replacement atomically.
+This-and-following edits split the series and transfer applicable future
+exceptions.
 
 ## Restrictions
 
 CRUD gated by `RESTRICTION_MANAGE`. Creating/removing a restriction must
 update/derive affected schedule validity and trigger notifications as
 required.
+For a schedule on date D, a restriction removed at or before D 00:00:00.000
+Asia/Tokyo no longer applies to D. A later removal leaves D's existing
+invalid state in effect.
 
 ## Events
 

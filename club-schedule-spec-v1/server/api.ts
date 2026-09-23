@@ -10,6 +10,7 @@ import {
 } from "./auth";
 import { hashPassword, verifyPassword } from "./crypto";
 import { effectivePermissions } from "./permissions";
+import { handlePhase2 } from "./phase2-api";
 import { currentTerms, needsTerms } from "./terms";
 import type { Env, PublicUser, UserRow } from "./types";
 
@@ -81,7 +82,7 @@ export async function handleApi(request: Request, env: Env): Promise<Response> {
   const method = request.method;
   if (!path.startsWith("/api/"))
     return error(404, "NOT_FOUND", "見つかりません。");
-  if (!["GET", "POST", "PATCH"].includes(method))
+  if (!["GET", "POST", "PATCH", "DELETE"].includes(method))
     return error(405, "METHOD_NOT_ALLOWED", "この操作は利用できません。");
   if (method !== "GET" && !sameOrigin(request))
     return error(403, "ORIGIN", "操作を確認できません。");
@@ -194,6 +195,30 @@ export async function handleApi(request: Request, env: Env): Promise<Response> {
     if (needsTerms(user, terms))
       return error(403, "TERMS_REQUIRED", "利用規約への同意が必要です。");
 
+    if (path === "/api/me/display-preferences" && method === "GET") {
+      const preference = await env.DB.prepare(
+        "SELECT week_start FROM user_display_preferences WHERE user_id = ?",
+      )
+        .bind(user.id)
+        .first<{ week_start: string }>();
+      return json({ data: { week_start: preference?.week_start ?? "sunday" } });
+    }
+    if (path === "/api/me/display-preferences" && method === "PATCH") {
+      const input = await body(request);
+      if (
+        !input ||
+        Object.keys(input).length !== 1 ||
+        !["sunday", "monday"].includes(String(input.week_start))
+      )
+        return error(400, "VALIDATION", "週の開始曜日を確認してください。");
+      await env.DB.prepare(
+        "INSERT INTO user_display_preferences (user_id, week_start) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET week_start = excluded.week_start",
+      )
+        .bind(user.id, input.week_start)
+        .run();
+      return json({ data: { week_start: input.week_start } });
+    }
+
     if (path === "/api/me" && method === "GET") {
       const permissions = await effectivePermissions(env.DB, user.id);
       return json({
@@ -246,6 +271,12 @@ export async function handleApi(request: Request, env: Env): Promise<Response> {
         .first<UserRow>();
       return json({ data: { user: publicUser(updated!) } });
     }
+    if (
+      /^\/api\/(calendar|locations|class-periods|closures|overrides|restrictions|schedules)(\/|$)/.test(
+        path,
+      )
+    )
+      return handlePhase2(request, env, user);
     return error(404, "NOT_FOUND", "見つかりません。");
   } catch (cause) {
     console.error("API failure", cause);

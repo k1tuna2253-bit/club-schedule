@@ -90,8 +90,14 @@ Weekend/holiday/no-school: - clock-time controls primary - period
 controls collapsed by default
 
 Support: - multiple/non-contiguous periods - mixed periods and clock
-time - optional end time - campus/common - location selection - memo -
-memo visibility - recurrence - previous-same shortcut
+time - optional end time - campus/common - location selection - separate
+optional private and shared memo fields (both may be filled) - recurrence
+- previous-same shortcut
+
+The private memo is labelled as visible only to the owner. In day
+detail, display only non-empty memo fields the viewer may read; do not
+hint at a private memo to other viewers. Calendar cells never display
+memo bodies. Both memo fields may also be left empty.
 
 Registration should remain reachable from appropriate app contexts
 without dominating the home screen.

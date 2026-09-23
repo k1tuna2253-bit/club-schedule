@@ -18,6 +18,9 @@ import {
   SignOut,
   UserCircle,
 } from "@phosphor-icons/react";
+import { CalendarApp } from "./CalendarApp";
+import { ChoiceGroup } from "./ChoiceGroup";
+import type { WeekStart } from "./week-start";
 
 type User = {
   id: string;
@@ -334,7 +337,7 @@ export function App() {
           onLogout={logout}
         />
       ) : (
-        <Home user={session.user} go={go} />
+        <CalendarApp user={session.user} />
       )}
     </Shell>
   );
@@ -460,28 +463,6 @@ function TermsScreen({
   );
 }
 
-function Home({ user, go }: { user: User; go: (path: string) => void }) {
-  return (
-    <>
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">ホーム</p>
-          <h1>{user.display_name}さん</h1>
-        </div>
-      </div>
-      <section className="card">
-        <h2>アカウントの準備ができました</h2>
-        <p className="muted">
-          予定表は次の開発段階で追加されます。現在はプロフィールとパスワードを管理できます。
-        </p>
-        <button onClick={() => go("/app/profile")}>
-          プロフィールを開く <ArrowRight size={18} aria-hidden="true" />
-        </button>
-      </section>
-    </>
-  );
-}
-
 function Profile({
   user,
   onUser,
@@ -500,6 +481,26 @@ function Profile({
   const [passwordError, setPasswordError] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [weekStart, setWeekStart] = useState<WeekStart>("sunday");
+  useEffect(() => {
+    api<{ week_start: WeekStart }>("/api/me/display-preferences")
+      .then((data) => setWeekStart(data.week_start))
+      .catch((e: Error) => setError(e.message));
+  }, []);
+  const saveWeekStart = async (value: WeekStart) => {
+    setError("");
+    try {
+      const result = await api<{ week_start: WeekStart }>(
+        "/api/me/display-preferences",
+        "PATCH",
+        { week_start: value },
+      );
+      setWeekStart(result.week_start);
+      setMessage("表示設定を保存しました。");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
   const save = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
@@ -556,6 +557,18 @@ function Profile({
       )}
       <div className="profile-grid">
         <section className="card">
+          <h2>表示設定</h2>
+          <ChoiceGroup
+            label="週の始まり"
+            value={weekStart}
+            onChange={saveWeekStart}
+            options={[
+              { value: "sunday", label: "日曜日" },
+              { value: "monday", label: "月曜日" },
+            ]}
+          />
+        </section>
+        <section className="card">
           <h2>基本情報</h2>
           <form onSubmit={save}>
             <label>
@@ -577,16 +590,15 @@ function Profile({
                 required
               />
             </label>
-            <label>
-              主なキャンパス
-              <select
-                value={campus}
-                onChange={(e) => setCampus(e.target.value)}
-              >
-                <option value="omiya">大宮</option>
-                <option value="hirakata">枚方</option>
-              </select>
-            </label>
+            <ChoiceGroup
+              label="主なキャンパス"
+              value={campus}
+              onChange={setCampus}
+              options={[
+                { value: "omiya", label: "大宮" },
+                { value: "hirakata", label: "枚方" },
+              ]}
+            />
             <button className="primary" type="submit">
               変更を保存
             </button>

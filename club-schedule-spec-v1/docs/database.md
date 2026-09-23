@@ -76,11 +76,14 @@ Long breaks/no-school periods.
 -   campus_scope / common indicator
 -   clock_start nullable
 -   clock_end nullable
--   memo nullable
--   memo_visibility
+-   private_memo nullable; visible only to the owner
+-   shared_memo nullable; visible to users who may view the schedule
+-   memo and memo_visibility are legacy migration columns; they do not
+    store new memo content and are not part of the current API contract
+-   kind: single, template, or exception
 -   recurrence_series_id nullable
--   validity state
--   invalid_reason nullable
+-   validity and invalid reasons are derived from applicable restrictions,
+    rather than fixed columns on schedules
 -   created_at
 -   updated_at
 
@@ -95,7 +98,19 @@ Many-to-many schedule/location relation where required.
 ### recurrence_series
 
 Rule, weekdays, end date and metadata needed to materialize/manage
-occurrences.
+occurrences. This-and-following edits split the series; future
+exceptions are transferred to the new series where applicable.
+
+### recurrence_exceptions
+
+Keyed by series_id and occurrence_date. An exception either cancels the
+original occurrence or references a replacement schedule. The
+occurrence_date remains the original date even when the replacement
+schedule's date is moved. The API exposes this original date as
+`original_date`, separately from the replacement's displayed `date`.
+Replacing or cancelling an existing replacement removes its former
+schedule row in the same D1 batch; its schedule_periods and
+schedule_locations rows are removed by foreign-key cascade.
 
 ## Restrictions
 
