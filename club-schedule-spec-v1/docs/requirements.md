@@ -76,9 +76,16 @@ holidays and registered university no-school periods default to
 clock-time entry; period entry may be revealed manually. Weekend always
 defaults to clock-time.
 
-Japanese public holidays are obtained automatically. Administrators
-register university long breaks/no-school periods and can override
-individual dates, including special teaching days.
+Japanese public holidays use a managed import: a script obtains the
+Cabinet Office's published data, validates it, and produces SQL for
+review and application to D1 `japanese_holidays`. D1 records which
+years were imported. Calendar views never fetch holidays from an external
+service at request time,
+and an unimported year is not treated as having no holidays. A failed
+import preserves previously validated data. The cadence for future
+automatic imports is undecided. Administrators register university long
+breaks/no-school periods and can override individual dates, including
+special teaching days.
 
 ## 6. Normal attendance schedules
 
@@ -88,8 +95,14 @@ Administrators do not normally pre-create activity days.
 A normal schedule may contain: - owner/user - date - campus/common
 scope - one or more locations as applicable - selected class periods,
 including non-contiguous periods - optional clock start - optional clock
-end - optional memo - memo visibility: everyone or private - recurrence
-metadata - validity/restriction state - timestamps
+end - optional private memo - optional shared memo - recurrence metadata
+- validity/restriction state - timestamps
+
+The two memo fields are independent and may both be filled or left empty.
+The private memo is visible only to the schedule owner and must be absent
+from API responses to other users. The shared memo is visible to users
+who may view the schedule. Calendar cells do not display memo bodies;
+day detail displays only non-empty memo fields that the viewer may read.
 
 Period data remains canonical period data; do not convert it into
 clock-time storage merely for convenience. Mixed period + clock-time
@@ -103,18 +116,38 @@ Multiple schedules for the same user/day are allowed. Overlapping time
 must not be double-counted in analytics. Non-overlapping portions are
 counted.
 
-"Previous same" copies location, time/period and memo.
+"Previous same" copies location, time/period and both memo fields when
+present.
 
 Recurrence supports: - weekly - selected weekdays - end date
 
 Recurring edit/delete must allow choosing the affected occurrence scope,
 including this occurrence and this-and-following where applicable.
 
-When creating an overlapping/duplicate schedule, warn and allow the user
-to decide whether to overwrite/continue according to the final UI flow.
+For a this-occurrence edit, preserve the original occurrence date as the
+exception key. If the occurrence is moved to another date, suppress the
+normal occurrence on its original date and display its replacement on the
+destination date. The replacement retains its recurrence lineage; after
+a series split, the exception belongs to the successor series with the
+same lineage. It exposes `original_date` separately from its displayed
+`date`.
+Editing the same occurrence again replaces and removes the prior
+replacement; cancelling it removes the replacement and marks the
+exception as cancelled. This-and-following edits split the series at the
+original occurrence date and transfer existing future exceptions to the
+new series as needed.
+
+When creating an overlapping/duplicate schedule, warn and let the user
+choose "戻って修正" or "このまま登録". The latter explicitly adds the new
+schedule while leaving existing schedules unchanged. The Worker must
+require an explicit `continue_conflict` flag before saving a conflicting
+schedule.
 
 Once a schedule date is in the past, that schedule cannot be edited or
 deleted, regardless of whether the nightly analytics job has run.
+For a moved recurring occurrence, mutations are prohibited if either
+the original occurrence date or the currently displayed replacement
+date is past in Asia/Tokyo.
 
 ## 7. Facility restrictions
 
@@ -127,9 +160,11 @@ is mandatory.
 If a restriction is added after schedules exist: - affected schedules
 are invalidated, not deleted, - invalidated schedules remain visible
 with reason/status, - invalidated schedules are excluded from
-participation statistics, - if the restriction is removed before the
-schedule date, affected schedules automatically revive and the owner is
-notified according to notification settings.
+participation statistics, - if the restriction is removed by the
+schedule date's 00:00:00.000 Asia/Tokyo boundary, affected schedules
+automatically revive. A removal after that boundary does not revive
+that day's invalid schedules. Notification behavior is defined in its
+later phase.
 
 If a restricted date passes while the schedule remains invalid, it is
 not counted in statistics.
